@@ -1,5 +1,8 @@
 """
 TODO:
+- Merge the code between backend and frontend
+- Make command line option with input arguments and choice if I want to use graphics or terminal as interface
+- Try to find good design pattern in the project
 
 DONE:
 - Xs and Os in higher size grids (ie > 20) have uneven margin in cell (small Xs are still off but I don't care anymore)
@@ -13,24 +16,17 @@ import time
 import re
 import asyncio
 
-SCREEN_SIZE = 800
-
-pygame.init()
-screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
-clock = pygame.time.Clock()
-
-COLOR_INACTIVE = pygame.Color('black')
-COLOR_ACTIVE = pygame.Color('white')
-FONT = pygame.font.Font(None, 32)
-
 class InputBox:
-    def __init__(self, x, y, w, h, text=''):
+    def __init__(self, x, y, w, h, color_active, color_inactive, font, text=''):
         self.rect = pygame.Rect(x, y, w, h)
-        self.color = COLOR_INACTIVE
+        self.color = color_inactive
         self.text = text
-        self.txt_surface = FONT.render(text, True, self.color)
+        self.txt_surface = font.render(text, True, self.color)
         self.active = False
         self.remove_default_text = True
+        self.color_active = color_active
+        self.color_inactive = color_inactive
+        self.font = font
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -42,11 +38,11 @@ class InputBox:
                     self.text = ""
                     self.remove_default_text = False
                     # Re-render the text.
-                    self.txt_surface = FONT.render(self.text, True, self.color)
+                    self.txt_surface = self.font.render(self.text, True, self.color)
             else:
                 self.active = False
             # Change the current color of the input box.
-            self.color = COLOR_ACTIVE if self.active else COLOR_INACTIVE
+            self.color = self.color_active if self.active else self.color_inactive
         if event.type == pygame.KEYDOWN:
             if self.active:
                 if event.key == pygame.K_RETURN:
@@ -56,7 +52,7 @@ class InputBox:
                 else:
                     self.text += event.unicode
                 # Re-render the text.
-                self.txt_surface = FONT.render(self.text, True, self.color)
+                self.txt_surface = self.font.render(self.text, True, self.color)
 
     def update(self):
         # Resize the box if the text is too long.
@@ -70,10 +66,10 @@ class InputBox:
         pygame.draw.rect(screen, self.color, self.rect, 2)
 
 class Button():
-    def __init__(self, x, y, w, h, button_color, text_color, text):
+    def __init__(self, x, y, w, h, button_color, text_color, font, text):
         self.color = button_color
         self.rect = pygame.Rect(x, y, w, h)
-        self.text = FONT.render(text, True, text_color)
+        self.text = font.render(text, True, text_color)
 
 def draw_x(surface, color, circle_center, circle_radius, thicc):
     x1 = circle_center[0] - int(circle_radius * 0.707)  # 0.707 is roughly cos(45) or sin(45)
@@ -97,6 +93,16 @@ def new_round(winning_indices, field_cells, possible_moves, player_turn, grid_si
     return winning_indices, field_cells, possible_moves, player_turn
 
 async def main():
+    SCREEN_SIZE = 800
+
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
+    clock = pygame.time.Clock()
+
+    color_inactive = pygame.Color('black')
+    color_active = pygame.Color('white')
+    font = pygame.font.Font(None, 32)
+
     grid_size = None
     k = None
     button = None
@@ -106,7 +112,6 @@ async def main():
     player_turn = True
     winning_indices = []
     field_cells = possible_moves = None
-    taken_moves = []
     scene1 = True
     scene2 = scene3 = False
     run = True
@@ -124,6 +129,8 @@ async def main():
                         if (m := re.search(r"(\d+)", input_boxes[0].text)) is not None and (n := re.search(r"(\d+)", input_boxes[1].text)) is not None:
                             grid_size = int(m.group(1))
                             k = int(n.group(1))
+                            if grid_size < 1 or grid_size > 50 or k < 1 or k > 10:
+                                continue
                             scene2 = False
                             scene3 = True
                             cell_clicked_event = None
@@ -151,10 +158,9 @@ async def main():
                         if field_cells[row][col][0] is None:
                             field_cells[row][col][0] = player_char
                             possible_moves.remove((row, col))
-                            taken_moves.append((row, col))
                             player_turn = not player_turn
                 else:
-                    backend.computer_move(possible_moves, computer_char, field_cells, player_char, taken_moves, grid_size, k)
+                    backend.computer_move(possible_moves, computer_char, field_cells, player_char, grid_size, k)
                     player_turn = not player_turn
                     time.sleep(0.5)
             else:
@@ -206,21 +212,23 @@ async def main():
                 pygame.draw.rect(screen, "firebrick3", (0, 0, SCREEN_SIZE, SCREEN_SIZE))
                 pygame.draw.circle(screen, "white", center, radius, 20)
 
-            bs = FONT.render("Board size:", True, "white")
-            sir = FONT.render("Stones in row:", True, "white")
-            screen.blit(bs, (form_center[0] - 5 * box_width, form_center[1] - box_height + box_margin))
-            screen.blit(sir, (form_center[0] - 5 * box_width, form_center[1] - box_height + box_margin + box_gap))
+            bs = font.render("Board size (1-50):", True, "white")
+            sir = font.render("Stones in row (1-10):", True, "white")
+            screen.blit(bs, (form_center[0] - 6 * box_width, form_center[1] - box_height + box_margin))
+            screen.blit(sir, (form_center[0] - 6 * box_width, form_center[1] - box_height + box_margin + box_gap))
 
             if not input_boxes: 
                 input_boxes += [
-                    InputBox(form_center[0] - box_width, form_center[1] - box_height, box_width, box_height, "3"),
-                    InputBox(form_center[0] - box_width, form_center[1] - box_height + box_gap, box_width, box_height, "3")
+                    InputBox(form_center[0] - box_width, form_center[1] - box_height, box_width, box_height,
+                             color_active, color_inactive, font, "5"),
+                    InputBox(form_center[0] - box_width, form_center[1] - box_height + box_gap, box_width, box_height,
+                             color_active, color_inactive, font, "3")
                 ]
             for box in input_boxes:
                 box.draw(screen)
             
             if button is None:
-                button = Button(form_center[0] - box_width, form_center[1] - box_height + 2 * box_gap, 80, 40, "black", "white", "Start")
+                button = Button(form_center[0] - box_width, form_center[1] - box_height + 2 * box_gap, 80, 40, "black", "white", font, "Start")
 
             pygame.draw.rect(screen, button.color, button.rect)
             screen.blit(button.text, (button.rect.x + 15, button.rect.y + 10))
@@ -249,5 +257,11 @@ async def main():
         clock.tick(60)
         await asyncio.sleep(0)
 
-asyncio.run(main())
-pygame.quit()
+
+if __name__ == "__main__":
+    args = backend.get_args()
+    if args.term:
+        backend.terminal_main(args)
+    else:
+        asyncio.run(main())
+        pygame.quit()

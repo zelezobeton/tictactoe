@@ -1,6 +1,7 @@
 import random
 import re
 import time
+import argparse
 
 def replace_char_at_index(string, index, char):
     return string[:index] + char + string[index + 1:]
@@ -202,7 +203,7 @@ def prolong_strike(field_cells, comp_char, player_char, k):
         return biggest_player_tuple[2] if biggest_player_tuple[2] is not None else biggest_player_tuple[3]
 
 
-def player_move(field_cells, char, field, n_int, possible_moves, taken_moves):
+def player_move(field_cells, char, field, n_int, possible_moves):
     while True:
         move = input("Your move (row index followed by column index separated by comma): ")
         if (m := re.search(r"^(\d+),(\d+)$", move)) is None:
@@ -218,10 +219,9 @@ def player_move(field_cells, char, field, n_int, possible_moves, taken_moves):
         else:
             field_cells[x_int][y_int][0] = char
             possible_moves.remove((x_int, y_int))
-            taken_moves.append((x_int, y_int))
             return put_char_on_field(field, "x", [x_int, y_int])
             
-def computer_move(possible_moves, char, field_cells, player_char, taken_moves, board_size, k, field = None):
+def computer_move(possible_moves, char, field_cells, player_char, board_size, k, field = None):
     # time.sleep(1)
     # print("Computer move:")
     if (make_strike := prolong_strike(field_cells, char, player_char, k)):
@@ -231,14 +231,36 @@ def computer_move(possible_moves, char, field_cells, player_char, taken_moves, b
     x, y = computer_move
     field_cells[x][y][0] = char
     possible_moves.remove(computer_move)
-    taken_moves.append(computer_move)
     if field is not None:
         return put_char_on_field(field, "o", computer_move)
 
-def play_tictactoe():
-    k = 3
-    n_int = 5
-    player_round = True
+def generate_field(grid_size):
+    field_cells = []
+    possible_moves = []
+    for x in range(grid_size):
+        row = []
+        for y in range(grid_size):
+            row.append([None, (x, y)])
+            possible_moves.append((x,y))
+        field_cells.append(row)
+    return field_cells, possible_moves
+
+def get_args():
+    parser = argparse.ArgumentParser(
+                    prog='Tictactoe',
+                    description='Get rect by super AI in piskvorky')
+    parser.add_argument('-s', choices=['x', 'o'], default="x", help='choose x (goes first) or o')
+    parser.add_argument('-m', type=int, default=5, choices=range(1,16), metavar="[1-15]",  help='choose board size')
+    parser.add_argument('-k', type=int, default=3, choices=range(1,6), metavar="[1-5]", help='choose stones in row needed to win')
+    parser.add_argument('--term', action='store_true', help='use terminal output instead of showing graphic interface')
+    return parser.parse_args()
+
+
+def terminal_main(args):
+    k = args.k
+    n_int = args.m
+    player_char = args.s
+    computer_char, player_round = ("o", True) if player_char == "x" else ("x", False)
 
     # k = None
     # n_int = None
@@ -258,24 +280,16 @@ def play_tictactoe():
     field = create_field_template(n_int)
     print(field)
     
-    field_cells = []
-    possible_moves = []
-    taken_moves = []
-    for x in range(n_int):
-        row = []
-        for y in range(n_int):
-            row.append([None, (x, y)])
-            possible_moves.append((x,y))
-        field_cells.append(row)
+    field_cells, possible_moves = generate_field(n_int)
 
-    player_char, computer_char = ("x", "o") if player_round else ("o", "x")
+    # player_char, computer_char = ("x", "o") if player_round else ("o", "x")
     while True:
         if possible_moves:
             if player_round:
-                field = player_move(field_cells, player_char, field, n_int, possible_moves, taken_moves)
+                field = player_move(field_cells, player_char, field, n_int, possible_moves)
                 player_round = not player_round
             else:
-                field = computer_move(possible_moves, computer_char, field_cells, player_char, taken_moves, n_int, k, field)
+                field = computer_move(possible_moves, computer_char, field_cells, player_char, n_int, k, field)
                 player_round = not player_round
             if (winner_char_and_indices := get_winner(field_cells, k)) is not None:
                 print(field)
@@ -285,17 +299,3 @@ def play_tictactoe():
         else:
             print("It's a tie!")
             break
-
-def generate_field(grid_size):
-    field_cells = []
-    possible_moves = []
-    # taken_moves = []
-    for x in range(grid_size):
-        row = []
-        for y in range(grid_size):
-            row.append([None, (x, y)])
-            possible_moves.append((x,y))
-        field_cells.append(row)
-    return field_cells, possible_moves
-
-# play_tictactoe()
