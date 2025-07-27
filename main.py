@@ -1,10 +1,9 @@
 """
 TODO:
-- Merge the code between backend and frontend
-- Make command line option with input arguments and choice if I want to use graphics or terminal as interface
 - Try to find good design pattern in the project
 
 DONE:
+- Make command line option with input arguments and choice if I want to use graphics or terminal as interface
 - Xs and Os in higher size grids (ie > 20) have uneven margin in cell (small Xs are still off but I don't care anymore)
 - Black border is uneven for some grid sizes, 30 for example. Maybe fix dividing?
 - Bug when I fill first form field and only click on second, start button won't work
@@ -85,12 +84,10 @@ def draw_x(surface, color, circle_center, circle_radius, thicc):
     pygame.draw.line(surface, color, (x1, y1), (x2, y2), thicc)
     pygame.draw.line(surface, color, (x3, y3), (x4, y4), thicc)
 
-def new_round(winning_indices, field_cells, possible_moves, player_turn, grid_size):
-    winning_indices = []
-    field_cells, possible_moves = backend.generate_field(grid_size)
+def new_round(player_char, grid_size):
     time.sleep(2)
-    player_turn = True
-    return winning_indices, field_cells, possible_moves, player_turn
+    player_turn = player_char == "x"
+    return [], *backend.generate_field(grid_size), player_turn
 
 async def main():
     SCREEN_SIZE = 800
@@ -112,8 +109,7 @@ async def main():
     player_turn = True
     winning_indices = []
     field_cells = possible_moves = None
-    scene1 = True
-    scene2 = scene3 = False
+    scene = 1
     run = True
     while run:
         # Events
@@ -131,8 +127,7 @@ async def main():
                             k = int(n.group(1))
                             if grid_size < 1 or grid_size > 50 or k < 1 or k > 10:
                                 continue
-                            scene2 = False
-                            scene3 = True
+                            scene = 3
                             cell_clicked_event = None
                             input_boxes = []
                             button = None
@@ -143,13 +138,14 @@ async def main():
         # Logic
         for box in input_boxes:
             box.update()
-        if scene3:
+        if scene == 3:
             cell_size = SCREEN_SIZE // grid_size
             outer_border = (SCREEN_SIZE % grid_size) // 2
             if field_cells is None and possible_moves is None:
                 field_cells, possible_moves = backend.generate_field(grid_size)
             if winning_indices:
-                winning_indices, field_cells, possible_moves, player_turn = new_round(winning_indices, field_cells, possible_moves, player_turn, grid_size)
+                winning_indices, field_cells, possible_moves, player_turn = new_round(player_char, grid_size)
+            # Game is afoot!
             if possible_moves:
                 if player_turn:
                     if cell_clicked_event is not None:
@@ -163,16 +159,17 @@ async def main():
                     backend.computer_move(possible_moves, computer_char, field_cells, player_char, grid_size, k)
                     player_turn = not player_turn
                     time.sleep(0.5)
+                if (winner_char_and_indices := backend.get_winner(field_cells, k)) is not None:
+                    winning_indices = winner_char_and_indices[1]
             else:
-                winning_indices, field_cells, possible_moves, player_turn = new_round(winning_indices, field_cells, possible_moves, player_turn, grid_size)
-            if (winner_char_and_indices := backend.get_winner(field_cells, k)) is not None:
-                winning_indices = winner_char_and_indices[1]
-        
+                # Tie
+                winning_indices, field_cells, possible_moves, player_turn = new_round(player_char, grid_size)
+
         # Graphics
         screen.fill("black")
-        circle_center = SCREEN_SIZE * 3 / 4, SCREEN_SIZE / 2
-        x_center = SCREEN_SIZE / 4, SCREEN_SIZE / 2
-        if scene1:
+        if scene == 1:
+            circle_center = SCREEN_SIZE * 3 / 4, SCREEN_SIZE / 2
+            x_center = SCREEN_SIZE / 4, SCREEN_SIZE / 2
             rect1 = pygame.draw.rect(screen, "black", (0, 0, SCREEN_SIZE / 2, SCREEN_SIZE))
             rect2 = pygame.draw.rect(screen, "black", (SCREEN_SIZE / 2, 0, SCREEN_SIZE / 2, SCREEN_SIZE))
             radius = 40
@@ -195,9 +192,8 @@ async def main():
                     player_char = "o"
                     computer_char = "x"
                     player_turn = False
-                scene1 = False
-                scene2 = True
-        if scene2:
+                scene = 2
+        if scene == 2:
             box_width = 50
             box_height = 32
             box_gap = 40
@@ -232,7 +228,7 @@ async def main():
 
             pygame.draw.rect(screen, button.color, button.rect)
             screen.blit(button.text, (button.rect.x + 15, button.rect.y + 10))
-        if scene3:
+        if scene == 3:
             cell_size = SCREEN_SIZE // grid_size
             outer_border = (SCREEN_SIZE % grid_size) // 2
             for i, row in enumerate(field_cells):

@@ -222,8 +222,6 @@ def player_move(field_cells, char, field, n_int, possible_moves):
             return put_char_on_field(field, "x", [x_int, y_int])
             
 def computer_move(possible_moves, char, field_cells, player_char, board_size, k, field = None):
-    # time.sleep(1)
-    # print("Computer move:")
     if (make_strike := prolong_strike(field_cells, char, player_char, k)):
         computer_move = make_strike
     else:
@@ -247,8 +245,9 @@ def generate_field(grid_size):
 
 def get_args():
     parser = argparse.ArgumentParser(
-                    prog='Tictactoe',
-                    description='Get rect by super AI in piskvorky')
+        prog='Tictactoe',
+        description='Get rect by super AI in piskvorky'
+    )
     parser.add_argument('-s', choices=['x', 'o'], default="x", help='choose x (goes first) or o')
     parser.add_argument('-m', type=int, default=5, choices=range(1,16), metavar="[1-15]",  help='choose board size')
     parser.add_argument('-k', type=int, default=3, choices=range(1,6), metavar="[1-5]", help='choose stones in row needed to win')
@@ -260,37 +259,24 @@ def terminal_main(args):
     k = args.k
     n_int = args.m
     player_char = args.s
-    computer_char, player_round = ("o", True) if player_char == "x" else ("x", False)
-
-    # k = None
-    # n_int = None
-    # player_round = None
-    # while True:
-    #     input_info = input("Choose board size (1-15), number in row to win (1-15 and smaller or same as board size) and x (goes first) or o, separated by comma: ")
-    #     if (m := re.search(r"^(\d+),(\d+),([x|o])$", input_info)) is None:
-    #         continue
-    #     else:
-    #         n_int = int(m.group(1))
-    #         k = int(m.group(2))
-    #         player_round = True if m.group(3) == "x" else False
-    #         if k < 1 or k > 15 or n_int < 1 or n_int > 15 or k > n_int:
-    #             continue
-    #         break
+    computer_char, player_turn = ("o", True) if player_char == "x" else ("x", False)
     
     field = create_field_template(n_int)
     print(field)
     
     field_cells, possible_moves = generate_field(n_int)
 
-    # player_char, computer_char = ("x", "o") if player_round else ("o", "x")
     while True:
+        # Game is afoot!
         if possible_moves:
-            if player_round:
+            if player_turn:
                 field = player_move(field_cells, player_char, field, n_int, possible_moves)
-                player_round = not player_round
+                player_turn = not player_turn
             else:
+                print("Computer move:")
                 field = computer_move(possible_moves, computer_char, field_cells, player_char, n_int, k, field)
-                player_round = not player_round
+                player_turn = not player_turn
+                # time.sleep(0.5)
             if (winner_char_and_indices := get_winner(field_cells, k)) is not None:
                 print(field)
                 print(f"Player {winner_char_and_indices[0]} has {k} strike and is winner!")
