@@ -6,49 +6,6 @@ import argparse
 def replace_char_at_index(string, index, char):
     return string[:index] + char + string[index + 1:]
 
-def create_field_template(n):
-    s1 = "+---+"
-    s2 = "|   |"
-    s3 = "---+"
-    s4 = "   |"
-    x = n + 1
-    field_list = []
-    m = (x * 3) - (x - 1) 
-    for a in range(m):
-        if a % 2 == 0:
-            row = []
-            for b in range(x):
-                if b == 0:
-                    row.append(s1)
-                else:
-                    row.append(s3)
-        else:
-            row = []
-            for b in range(x):
-                if b == 0 and a == 1:
-                    row.append(s2)
-                elif b == 0 and a > 1:
-                    row.append(f"|{(a - 1) // 2:{" "}>3}|")
-                else:
-                    if a == 1:
-                        row.append(f"{b:{" "}>3}|")
-                    else:
-                        row.append(s4)
-        field_list.append("".join(row))
-    return "\n".join(field_list)
-
-def put_char_on_field(field, char, indexes):
-    START_ROW = 3
-    ROW_DISTANCE = 2
-    START_CHAR = 6
-    CHAR_DISTANCE = 4
-    x, y = indexes # indexed from 0
-    field_split = field.split("\n")
-    row = field_split[x * ROW_DISTANCE + START_ROW]
-    field_split[x * ROW_DISTANCE + START_ROW] = replace_char_at_index(row, START_CHAR + y * CHAR_DISTANCE, char)
-    return "\n".join(field_split)
-
-
 def get_diagonals_both_directions(matrix):
     rows = len(matrix)
     cols = len(matrix[0]) if matrix else 0
@@ -202,46 +159,129 @@ def prolong_strike(field_cells, comp_char, player_char, k):
     if biggest_player_tuple is not None:
         return biggest_player_tuple[2] if biggest_player_tuple[2] is not None else biggest_player_tuple[3]
 
-
-def player_move(field_cells, char, field, n_int, possible_moves):
+def player_move(field):
     while True:
         move = input("Your move (row index followed by column index separated by comma): ")
         if (m := re.search(r"^(\d+),(\d+)$", move)) is None:
             continue
         x, y = m.group(1), m.group(2)
         x_int, y_int = int(x) - 1, int(y) - 1
-        if x_int < 0 or x_int > n_int - 1 or y_int < 0 or y_int > n_int - 1:
-            print(f"WARNING: Both values must be between 1 and {n_int}")
+        if x_int < 0 or x_int > field.m - 1 or y_int < 0 or y_int > field.m - 1:
+            print(f"WARNING: Both values must be between 1 and {field.m}")
             continue
-        if field_cells[x_int][y_int][0] is not None:
+        if not field.is_cell_free(x_int, y_int):
             print("WARNING: Input must be one of empty fields")
             continue
         else:
-            field_cells[x_int][y_int][0] = char
-            possible_moves.remove((x_int, y_int))
-            return put_char_on_field(field, "x", [x_int, y_int])
+            field.put_char_on_field(x_int, y_int)
+            field.change_turn()
+            break
             
-def computer_move(possible_moves, char, field_cells, player_char, board_size, k, field = None):
-    if (make_strike := prolong_strike(field_cells, char, player_char, k)):
+def computer_move(field):
+    if (make_strike := prolong_strike(field.cells, field.computer_char, field.player_char, field.k)):
         computer_move = make_strike
     else:
-        computer_move = random.choice(possible_moves)
+        computer_move = random.choice(field.possible_moves)
     x, y = computer_move
-    field_cells[x][y][0] = char
-    possible_moves.remove(computer_move)
-    if field is not None:
-        return put_char_on_field(field, "o", computer_move)
+    field.put_char_on_field(x, y, False)
+    field.change_turn()
 
-def generate_field(grid_size):
-    field_cells = []
-    possible_moves = []
-    for x in range(grid_size):
-        row = []
-        for y in range(grid_size):
-            row.append([None, (x, y)])
-            possible_moves.append((x,y))
-        field_cells.append(row)
-    return field_cells, possible_moves
+class Field:
+    def __init__(self, m = None, k = None, player_char = None):
+        self._cells = []
+        self._possible_moves = []
+
+        self.m = m
+        self.k = k
+        self.player_char = player_char
+
+    def generate_from_input(self):
+        if self.m is None or self.k is None or self.player_char is None:
+            raise(Exception("Board size, stones in row or player character were not input"))
+        self._cells = []
+        self._possible_moves = []
+        for x in range(self.m):
+            row = []
+            for y in range(self.m):
+                row.append([None, (x, y)])
+                self._possible_moves.append((x,y))
+            self._cells.append(row)
+        self.computer_char, self.player_turn = ("o", True) if self.player_char == "x" else ("x", False)
+
+    def change_turn(self):
+        self.player_turn = not self.player_turn
+
+    def is_cell_free(self, x, y):
+        return self._cells[x][y][0] is None
+    
+    @property
+    def cells(self):
+        return self._cells
+    
+    @property
+    def possible_moves(self):
+        return self._possible_moves
+
+    def put_char_on_field(self, x, y, player=True):
+        char = self.player_char if player else self.computer_char
+        self._cells[x][y][0] = char
+        self.possible_moves.remove((x, y))
+
+class TerminalField(Field):
+    def __init__(self, m, k, player_char):
+        super().__init__(m, k, player_char)
+        self.generate_from_input()
+        self.printable_field = self.create_printable_field()
+
+    def put_char_on_field(self, x, y, player=True):
+        char = self.player_char if player else self.computer_char
+        self._cells[x][y][0] = char
+        self.possible_moves.remove((x, y))
+        self.update_printable_field(x, y, char)
+
+    def update_printable_field(self, x, y, char):
+        START_ROW = 3
+        ROW_DISTANCE = 2
+        START_CHAR = 6
+        CHAR_DISTANCE = 4
+        field_split = self.printable_field.split("\n")
+        row = field_split[x * ROW_DISTANCE + START_ROW]
+        field_split[x * ROW_DISTANCE + START_ROW] = replace_char_at_index(row, START_CHAR + y * CHAR_DISTANCE, char)
+        self.printable_field = "\n".join(field_split)
+
+    def print(self):
+        print(self.printable_field)
+        
+    def create_printable_field(self):
+        s1 = "+---+"
+        s2 = "|   |"
+        s3 = "---+"
+        s4 = "   |"
+        x = self.m + 1
+        field_list = []
+        n = (x * 3) - (x - 1) 
+        for a in range(n):
+            if a % 2 == 0:
+                row = []
+                for b in range(x):
+                    if b == 0:
+                        row.append(s1)
+                    else:
+                        row.append(s3)
+            else:
+                row = []
+                for b in range(x):
+                    if b == 0 and a == 1:
+                        row.append(s2)
+                    elif b == 0 and a > 1:
+                        row.append(f"|{(a - 1) // 2:{" "}>3}|")
+                    else:
+                        if a == 1:
+                            row.append(f"{b:{" "}>3}|")
+                        else:
+                            row.append(s4)
+            field_list.append("".join(row))
+        return "\n".join(field_list)
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -254,34 +294,24 @@ def get_args():
     parser.add_argument('--term', action='store_true', help='use terminal output instead of showing graphic interface')
     return parser.parse_args()
 
-
 def terminal_main(args):
-    k = args.k
-    n_int = args.m
-    player_char = args.s
-    computer_char, player_turn = ("o", True) if player_char == "x" else ("x", False)
-    
-    field = create_field_template(n_int)
-    print(field)
-    
-    field_cells, possible_moves = generate_field(n_int)
+    field = TerminalField(args.m, args.k, args.s)
+    field.print()
 
     while True:
         # Game is afoot!
-        if possible_moves:
-            if player_turn:
-                field = player_move(field_cells, player_char, field, n_int, possible_moves)
-                player_turn = not player_turn
+        if field.possible_moves:
+            if field.player_turn:
+                player_move(field)
             else:
                 print("Computer move:")
-                field = computer_move(possible_moves, computer_char, field_cells, player_char, n_int, k, field)
-                player_turn = not player_turn
+                computer_move(field)
                 # time.sleep(0.5)
-            if (winner_char_and_indices := get_winner(field_cells, k)) is not None:
-                print(field)
-                print(f"Player {winner_char_and_indices[0]} has {k} strike and is winner!")
+            if (winner_char_and_indices := get_winner(field.cells, field.k)) is not None:
+                field.print()
+                print(f"Player {winner_char_and_indices[0]} has {field.k} strike and is winner!")
                 break
-            print(field)
+            field.print()
         else:
             print("It's a tie!")
             break
