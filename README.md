@@ -1,2 +1,2 @@
-# Tictactoe
-Playable [here](https://zelezobeton.github.io/tictactoe/)
+# mnkgame
+Playable [here](https://zelezobeton.github.io/mnkgame/)
